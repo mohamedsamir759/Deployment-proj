@@ -1,0 +1,44 @@
+---
+- name: Deploy Dockerized App on Ubuntu Webserver
+  hosts: servers
+  become: true
+
+  vars:
+    app_deploy_dir: /home/mohamedsamir/Desktop/microservices_app
+
+  tasks:
+    - name: Ensure rsync is installed
+      package:
+        name: rsync
+        state: present
+
+    - name: Ensure application directory exists
+      file:
+        path: "{{ app_deploy_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Sync project files except excluded items
+      ansible.builtin.synchronize:
+        src: ./
+        dest: "{{ app_deploy_dir }}/"
+        recursive: yes
+        delete: yes
+        rsync_opts:
+          - "--quiet"
+          - "--exclude=.gitlab-ci.yml"
+          - "--exclude=ansible.cfg"
+          - "--exclude=deploy.yml"
+          - "--exclude=inventory/"
+          - "--exclude=playbook.yml"
+          - "--exclude=README.md"
+          - "--exclude=gitlab-runner/"
+        rsync_path: rsync
+      delegate_to: localhost
+      become: false
+
+    - name: Deploy application using Docker Compose
+      shell: docker compose up -d --build
+      args:
+        chdir: "{{ app_deploy_dir }}"
+

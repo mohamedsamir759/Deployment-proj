@@ -1,0 +1,122 @@
+stages:
+    - notify
+    - install
+    - lint
+    - test
+    - build
+    - deploy
+    - scan
+    - live
+variables:
+  DOCKER_IMAGE_BACKEND: "mohamedsamir759/microservices-back"
+  DOCKER_IMAGE_FRONTEND: "mohamedsamir759/microservices-front"
+  DOCKER_TAG: "${CI_COMMIT_SHA}"
+slack_pipline_notify:
+    stage: notify
+    image: curlimages/curl:latest
+    script:
+      - >
+        curl -X POST -H 'Content-type: application/json' --data '{"text":"Hello, World!"}' https://hooks.slack.com/services/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
+
+build_frontend:
+  stage: install
+  image: node:20
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - frontend/node_modules/
+  script:
+    - cd frontend
+    - npm install
+    - npm run build
+  artifacts:
+    paths:
+      - frontend/build/
+
+build_backend:
+  stage: install
+  image: python:3.11-slim
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - venv/
+  script:
+    - python -m venv venv
+    - source venv/bin/activate
+    - pip install -r backend/requirements.txt
+
+
+lint_frontend:
+  stage: lint
+  image: node:20-alpine
+  cache:
+    paths:
+      - frontend/node_modules/
+  script:
+    - cd frontend
+    - npm install
+    - npm run lint || true
+
+lint_backend:
+  stage: lint
+  image: python:3.11-slim
+  script:
+    - pip install flake8 black
+    - black backend
+    - cd backend && flake8 . || true
+
+test_backend:
+  stage: test
+  image: python:3.10
+  script:
+    - cd backend
+    - pip install pytest
+    - pytest || true
+
+test_frontend:
+  stage: test
+  image: node:18-alpine
+  script:
+    - cd frontend
+    - npm test || true
+
+docker_compose:
+  stage: build
+  image: docker:24.0.5
+  services:
+    - docker:dind
+  before_script:
+    - apk add --no-cache docker-cli-compose
+  script:
+    - docker compose -f docker-compose.yml build
+    - docker compose -f docker-compose.yml up -d
+    - docker compose -f docker-compose.yml ps
+    
+
+deploy:
+  stage: deploy
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - echo "$DOCKERHUB_TOKKEN" | docker login -u "mohamedsamir759" --password-stdin
+  script:
+    - docker build -t $DOCKER_IMAGE_FRONTEND:$DOCKER_TAG ./frontend
+    - docker push $DOCKER_IMAGE_FRONTEND:$DOCKER_TAG
+    - docker build -t $DOCKER_IMAGE_BACKEND:$DOCKER_TAG ./backend
+    - docker push $DOCKER_IMAGE_BACKEND:$DOCKER_TAG
+ 
+
+  
+
+    
+security_scan:
+  stage: scan
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  script:
+    - trivy image $DOCKER_IMAGE_FRONTEND:$DOCKER_TAG
+    - trivy image $DOCKER_IMAGE_BACKEND:$DOCKER_TAG
+
+

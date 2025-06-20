@@ -1,0 +1,46 @@
+services:
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    networks:
+      - frontend_backend_net
+
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "5001:5000"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=myapp_db
+      - DB_USER=myapp_user
+      - DB_PASSWORD=strongpassword
+    depends_on:
+      - db
+    networks:
+      - frontend_backend_net
+      - backend_db_net
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: myapp_db
+      POSTGRES_USER: myapp_user
+      POSTGRES_PASSWORD: strongpassword
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    networks:
+      - backend_db_net
+
+volumes:
+  postgres:
+
+networks:
+  frontend_backend_net:
+  backend_db_net:
+
